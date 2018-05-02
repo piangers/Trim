@@ -1,5 +1,5 @@
 <RCC>
     <qresource prefix="/plugins/Trim" >
-        <file>trim.png</file>
+        <file>tr.png</file>
     </qresource>
 </RCC>

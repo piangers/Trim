@@ -1,3 +1,11 @@
+# -*- coding: UTF-8 -*-
+from qgis.core import *
+from qgis.gui import *
+from PyQt4.QtCore import *
+from PyQt4.QtGui import *
+from selectiontool import SelectionTool
+import resources_rc
+
 class Trim:
 
     def __init__(self, iface):
@@ -7,6 +15,21 @@ class Trim:
         self.active = False
 
     def initGui(self):
+        # 1 - CRIAR UM BOTÃO PARA ATIVAR A FERRAMENTA
+        self.trimAction = QAction(QIcon(":/plugins/Trim/tr.png"), u'Trim', self.iface.mainWindow())
+        self.toolbar = self.iface.addToolBar(u'Trim tools')
+        self.toolbar.addAction(self.trimAction)
+
+        # 2 - CONECTAR O CLIQUE DO BOTÃO COM UM MÉTODO ("SLOT")
+        self.trimAction.triggered.connect(self.trim)
+
+        # 3 - MÉTODO TRIM
+
+    def unload(self):
+        del self.toolbar
+        self.canvas.unsetMapTool(self.seletor)
+
+    '''
         settings = QSettings()
         # Create action
         self.freehand_edit = \
@@ -51,9 +74,20 @@ class Trim:
         self.freehand_edit.setChecked(True)
         self.tool.rbFinished['QgsGeometry*'].connect(self.createFeature)
         self.active = True
+    '''    
     
     def trim (self):
+        # 4 - ATIVAR A FERRAMENTA DE SELEÇÃO "PERSONALIZADA"
 
+        self.iface.activeLayer().setSelectedFeatures([])
+        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
+        self.canvas.setMapTool(self.seletor)
+        self.seletor.twoSelected.connect(self.doWork)
+
+    def doWork(self):
+        print u'Deu certo!'
+
+'''
         intersections = []
         mc = self.canvas
         layer1 = mc.currentLayer()
@@ -80,4 +114,4 @@ class Trim:
             
             self.iface.activeLayer().setSelectedFeatures(selecionados)
 
-            
+ '''           

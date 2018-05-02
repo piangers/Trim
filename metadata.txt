@@ -30,7 +30,7 @@ tags=python
 
 homepage=http://homepage
 category=Plugins
-icon=l.png
+icon=tr.png
 # experimental flag
 experimental=True
 
