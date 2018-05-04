@@ -19,13 +19,21 @@ class Trim:
     def initGui(self):
         # 1 - CRIAR UM BOTÃO PARA ATIVAR A FERRAMENTA
         settings = QSettings()
+        self.freehand_edit = \
         self.trimAction = QAction(QIcon(":/plugins/Trim/tr.png"), u'Trim', self.iface.mainWindow())
         self.spinBox = QDoubleSpinBox(self.iface.mainWindow())
-        self.toolbar = self.iface.addToolBar(u'Trim tools')
-        
+        #self.toolbar = self.iface.addToolBar(u'Trim tools')
+        #self.freehand_edit.setEnabled(False)
+        #self.freehand_edit.setCheckable(True)
+        # Add toolbar button and menu item
+        self.iface.digitizeToolBar().addAction(self.freehand_edit)
+        self.iface.editMenu().addAction(self.freehand_edit)
         # 2 - CONECTAR O CLIQUE DO BOTÃO COM UM MÉTODO ("SLOT")
         self.trimAction.triggered.connect(self.trim)
        
+
+
+
         #Padrões fixados
         
         self.spinBox.setDecimals(3)
@@ -36,17 +44,19 @@ class Trim:
         self.iface.digitizeToolBar().addWidget(self.spinBox)
         self.spinBox.setToolTip(" Tolerancia de Trim .")
         self.spinBoxAction.setEnabled(False)
-        self.toolbar.addAction(self.trimAction)
+        #self.toolbar.addAction(self.trimAction)
 
     
     
     def unload(self):
+        self.iface.digitizeToolBar().removeAction(self.freehand_edit)
         self.iface.digitizeToolBar().removeAction(self.spinBoxAction)
-        del self.toolbar
+        
         try:
             self.canvas.unsetMapTool(self.seletor)
         except:
             pass
+
 
     def trim (self):
         # 4 - ATIVAR A FERRAMENTA DE SELEÇÃO "PERSONALIZADA"
@@ -84,3 +94,8 @@ class Trim:
             
             self.iface.activeLayer().setSelectedFeatures(selecionados)
 
+def deactivate(self):
+        self.freehand_edit.setChecked(False)
+        if self.active:
+            self.tool.rbFinished['QgsGeometry*'].disconnect(self.createFeature)
+        self.active = False
