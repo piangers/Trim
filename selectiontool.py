@@ -5,7 +5,7 @@ from PyQt4.QtCore import *
 
 class SelectionTool(QgsMapToolIdentify):
     
-    twoSelected = pyqtSignal([int])
+    twoSelected = pyqtSignal(list)
 
     def __init__(self, iface, geomType):
         super(SelectionTool, self).__init__(iface.mapCanvas())
