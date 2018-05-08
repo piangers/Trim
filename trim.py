@@ -31,9 +31,6 @@ class Trim:
         # 2 - CONECTAR O CLIQUE DO BOTÃO COM UM MÉTODO ("SLOT")
         self.trimAction.triggered.connect(self.trim)
        
-
-
-
         #Padrões fixados
         
         self.spinBox.setDecimals(3)
@@ -45,9 +42,7 @@ class Trim:
         self.spinBox.setToolTip(" Tolerancia de Trim .")
         self.spinBoxAction.setEnabled(False)
         #self.toolbar.addAction(self.trimAction)
-
-    
-    
+ 
     def unload(self):
         self.iface.digitizeToolBar().removeAction(self.freehand_edit)
         self.iface.digitizeToolBar().removeAction(self.spinBoxAction)
@@ -66,24 +61,50 @@ class Trim:
         self.canvas.setMapTool(self.seletor)
         self.seletor.twoSelected.connect(self.doWork)
 
-    def doWork(self):
-        print u'Deu certo!'
-        # 5 - PEGAR AS DUAS GEOMETRIAS SELECIONADAS E VERIFICAR SE EXISTE INTERSEÇÃO
-        # for s in self.iface.selecionadas.getFeatures():
-        #     if s[0].geometry().intersection(s[1].geometry()):
-        #         self.iface.selecionadas.select(s[0].id()) 
-        # # 6 - PEGA O PONTO DE INTERSEÇÃO E VERIFICA QUAl É O ULTIMO VERTICE DA PRIMEIRA GEOMETRIA SELECIONADA
-            
-        #     # feat = self.iface.selecionadas.getFeatures()
+    def doWork(self, selecionadas):
+        # "selecionadas" EH A LISTA COM AS FEATUREID DAS FEIÇÕES SELECIONADAS (2)
+        print (u'Deu certo!')
+        # PEGAR O COMPRIMENTO DAS DUAS LINHAS
+        layer = self.iface.activeLayer()
+        featureParaCortar = layer.getFeature(selecionadas[0])
+        featureDeCorte = layer.getFeature(selecionadas[1])
+        layer = iface.activeLayer()
+        selected = []
 
-        #     # for feature in feat:
-        #     #     vertices = feature.geometry().asPolyline()
-        #     #     points = []
+        for feat in layer.getFeatures():
+            selected.append(feat)
 
-        #     #     for v in vertices:
-        #     #         points.append(v)
-    
-        
+        feat0 = selected[0]
+        feat1 = selected[1]
+        geom0 = feat0.geometry()
+        geom1 = feat1.geometry()
+
+        sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
+
+        geomNova = splits[0]
+        featNova = QgsFeature()
+
+        atributosNovos = []
+
+        for a in feat0.attributes():
+            atributosNovos.append(None)
+
+        featNova.setGeometry(geomNova)
+        featNova.setAttributes(atributosNovos)
+        layer.startEditing()
+        layer.addFeature(featNova, True)
+        layer.commitChanges()
+
+        for feat in layer.getFeatures():
+            geom = feat.geometry()
+            if geom.equals(geomNova):
+                    break
+
+        idParaRemover = feat.id()
+        print idParaRemover
+        layer.startEditing()
+        layer.deleteFeature(idParaRemover)
+        layer.commitChanges()
 
 
     def selecaoMudou(self, added, removed, cleared):
@@ -94,8 +115,47 @@ class Trim:
             
             self.iface.activeLayer().setSelectedFeatures(selecionados)
 
-def deactivate(self):
-        self.freehand_edit.setChecked(False)
-        if self.active:
-            self.tool.rbFinished['QgsGeometry*'].disconnect(self.createFeature)
-        self.active = False
+
+
+
+
+### SCRIPT PRA RODAR NO QGIS
+
+
+
+layer = iface.activeLayer()
+selected = []
+
+for feat in layer.getFeatures():
+    selected.append(feat)
+
+feat0 = selected[0]
+feat1 = selected[1]
+geom0 = feat0.geometry()
+geom1 = feat1.geometry()
+
+sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
+
+geomNova = splits[0]
+featNova = QgsFeature()
+
+atributosNovos = []
+
+for a in feat0.attributes():
+    atributosNovos.append(None)
+
+featNova.setGeometry(geomNova)
+featNova.setAttributes(atributosNovos)
+layer.startEditing()
+layer.addFeature(featNova, True)
+layer.commitChanges()
+
+for feat in layer.getFeatures():
+    geom = feat.geometry()
+    if geom.equals(geomNova):
+        break
+
+idParaRemover = feat.id()
+print idParaRemover
+layer.startEditing()
+layer.deleteFeature(idParaRemover)
