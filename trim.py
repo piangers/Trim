@@ -3,6 +3,7 @@ from qgis.core import *
 from qgis.gui import *
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
+import math
 from selectiontool import SelectionTool
 import resources_rc
 #Import own classes and tools
@@ -20,21 +21,26 @@ class Trim:
         # 1 - CRIAR UM BOTÃO PARA ATIVAR A FERRAMENTA
         settings = QSettings()
         self.trimAction = QAction(QIcon(":/plugins/Trim/tr.png"), u'Trim', self.iface.mainWindow())
+        self.expandAction = QAction(QIcon(":/plugins/Trim/ex.png"), u'Expand', self.iface.mainWindow())
         self.spinBox = QDoubleSpinBox(self.iface.mainWindow())
         self.toolbar = self.iface.addToolBar(u'Trim tools')
         # 2 - CONECTAR O CLIQUE DO BOTÃO COM UM MÉTODO ("SLOT")
         self.trimAction.triggered.connect(self.trim)
+        self.expandAction.triggered.connect(self.expand)
+        self.spinBox.valueChanged.connect(self.setTolerancia)
        
         #Padrões fixados
         
-        self.spinBox.setDecimals(3)
+        self.spinBox.setDecimals(1)
         self.spinBox.setMinimum(0.000)
-        self.spinBox.setMaximum(5.000)
+        self.spinBox.setMaximum(5000.000)
         self.spinBox.setSingleStep(0.100)
-        self.spinBox.setToolTip(" Tolerancia de Trim .")
+        self.tolerancia = self.spinBox.value()
+        self.spinBox.setToolTip("Tolerancia")
         #self.spinBoxAction.setEnabled(False)
 
         self.toolbar.addAction(self.trimAction)
+        self.toolbar.addAction(self.expandAction)
         self.toolbar.addWidget(self.spinBox)
  
     def unload(self):
@@ -45,8 +51,10 @@ class Trim:
         except:
             pass
 
+    def setTolerancia(self, t):
+        self.tolerancia = t
 
-    def trim (self):
+    def trim (self,auto):
         # 4 - ATIVAR A FERRAMENTA DE SELEÇÃO "PERSONALIZADA"
         
         layer = self.iface.activeLayer() # pega a layer ativa
@@ -58,6 +66,70 @@ class Trim:
         self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
         self.canvas.setMapTool(self.seletor)
         self.seletor.twoSelected.connect(self.doWork)
+
+    def expand (self):
+        layer = self.iface.activeLayer() # pega a layer ativa
+        if layer == None:
+            print u'Selecione uma camada antes de ativar a ferramenta!'
+            return
+        
+        layer.setSelectedFeatures([])
+        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
+        self.canvas.setMapTool(self.seletor)
+        self.seletor.twoSelected.connect(self.doWork2)
+
+    def doWork2(self, selecionadas):
+        dist = self.tolerancia
+
+        layer = self.iface.activeLayer()
+
+        idParaAlongar = selecionadas[0]
+        idDeTeste = selecionadas[1]
+
+        featParaAlongar = layer.getFeatures(QgsFeatureRequest(idParaAlongar)).next()
+        featDeTeste = layer.getFeatures(QgsFeatureRequest(idDeTeste)).next()
+
+        geomParaAlongar = featParaAlongar.geometry()
+        geomDeTeste = featDeTeste.geometry()
+
+        if not geomParaAlongar.intersects(geomDeTeste):
+            ultimoVertice = len(geomParaAlongar.asPolyline())-1
+            extr1 = geomParaAlongar.vertexAt(0)
+            extr2 = geomParaAlongar.vertexAt(ultimoVertice)
+
+            extr = -1
+            dist1 = extr1.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extr1)).asPoint())
+            dist2 = extr2.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extr2)).asPoint())
+            if dist1 < dist2:
+                extr = 0
+            else:
+                extr = ultimoVertice
+    
+            adj1, adj2 = geomParaAlongar.adjacentVertices(extr)
+            adj = adj1 if (adj1 != -1) else adj2
+
+            ultimo = geomParaAlongar.vertexAt(extr)
+            anterior = geomParaAlongar.vertexAt(adj)
+
+            ang = math.atan((ultimo.y() - anterior.y())/(ultimo.x() - anterior.x()))
+
+            novoX = ultimo.x() + dist * math.cos(ang)
+            novoY = ultimo.y() + dist * math.sin(ang)
+
+            layer.startEditing()
+            layer.moveVertex(novoX, novoY, idParaAlongar, extr)
+            layer.commitChanges()
+
+            featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
+            novaGeom = featParaAlongar.geometry()
+            if not novaGeom.intersects(geomDeTeste):
+                layer.startEditing()
+                layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extr)
+                layer.commitChanges()
+            
+            else:
+                selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
+                self.doWork(selecionadas2)
 
     def doWork(self, selecionadas):
         layer = self.iface.activeLayer() # pega a layer ativa
@@ -73,7 +145,7 @@ class Trim:
         sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
 
         if len(splits) == 0:
-            print u'Não há intersecção entre as feições selecionadas!'
+            print ('Não há intersecção entre as feições selecionadas!')
             return
 
         geomNova1 = splits[0]
