@@ -54,34 +54,33 @@ class Trim:
     def setTolerancia(self, t):
         self.tolerancia = t
 
-    def trim (self,auto):
-        # 4 - ATIVAR A FERRAMENTA DE SELEÇÃO "PERSONALIZADA"
+    def trim (self):
         
         layer = self.iface.activeLayer() # pega a layer ativa
         if layer == None:
-            print u'Selecione uma camada antes de ativar a ferramenta!'
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
         
-        layer.setSelectedFeatures([])
+        layer.setSelectedFeatures([]) # seta features como vazio
         self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
         self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.doWork)
+        self.seletor.twoSelected.connect(self.executeTrim)
 
     def expand (self):
         layer = self.iface.activeLayer() # pega a layer ativa
         if layer == None:
-            print u'Selecione uma camada antes de ativar a ferramenta!'
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
         
-        layer.setSelectedFeatures([])
+        layer.setSelectedFeatures([]) # seta features como vazio
         self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
         self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.doWork2)
+        self.seletor.twoSelected.connect(self.executeExpand)
 
-    def doWork2(self, selecionadas):
+    def executeExpand(self, selecionadas):
         dist = self.tolerancia
 
-        layer = self.iface.activeLayer()
+        layer = self.iface.activeLayer() # pega a layer ativa
 
         idParaAlongar = selecionadas[0]
         idDeTeste = selecionadas[1]
@@ -123,71 +122,57 @@ class Trim:
             featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
             novaGeom = featParaAlongar.geometry()
             if not novaGeom.intersects(geomDeTeste):
+                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
                 layer.startEditing()
                 layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extr)
                 layer.commitChanges()
             
             else:
                 selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
-                self.doWork(selecionadas2)
+                self.executeTrim(selecionadas2)
+        
+        self.expand()
 
-    def doWork(self, selecionadas):
-        layer = self.iface.activeLayer() # pega a layer ativa
-        # "selecionadas" EH A LISTA COM AS FEATUREID DAS FEIÇÕES SELECIONADAS (2)
-        # PEGAR O COMPRIMENTO DAS DUAS LINHAS
-            
+    def executeTrim(self, selecionadas):
+        layer = self.iface.activeLayer() # pegar a layer ativa
+        # "selecionadas" recebe a lista com as features das feições selecionadas(2)
+        
+        # pegar as duas linhas    
         featureParaCortar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next() # a linha a ser dividida
         featureDeCorte = layer.getFeatures(QgsFeatureRequest(selecionadas[1])).next() # a linha que faz a intersecão e serve de ponto para a divisão
         
         geom0 = featureParaCortar.geometry() # pega a geometria 
         geom1 = featureDeCorte.geometry() # pega a geometria
 
-        sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
-
-        if len(splits) == 0:
-            print ('Não há intersecção entre as feições selecionadas!')
-            return
-
-        geomNova1 = splits[0]
-        geomAntiga = geom0
-        geomNova2 = geomAntiga.difference(geomNova1)
-
-        # geomMantidas = []
-        # if geomNova1.length() > tolerancia:
-        #     geomMantidas.append(geomNova1)
-
-        # if geomNova2.length() > tolerancia:
-        #     geomMantidas.append(geomNova2)
-    
-        # if len(geomMantidas) == 2:
-        #     return
-        # 
-        # geomParaManter = geomMantidas[0]
-        
-        geomParaManter = QgsGeometry()
-        if geomNova1.length() > geomNova2.length():
-            geomParaManter = geomNova1
+        if not geom0.intersects(geom1): # Se não existe interseção então mostra a mensagem
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Não há intersecção entre as feições selecionadas!")
         else:
-            geomParaManter = geomNova2
-            
-        featNova = QgsFeature()
-        featAntiga = featureParaCortar
+            sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
+            geomNova1 = splits[0]
+            geomAntiga = geom0
+            geomNova2 = geomAntiga.difference(geomNova1)
+            layer.startEditing()
+            feat1 = QgsFeature()
+            feat2 = QgsFeature()
+            atributos = featureParaCortar.attributes()
+            feat1.setAttributes(atributos)
+            feat2.setAttributes(atributos)
+            feat1.setGeometry(geomNova1)
+            feat2.setGeometry(geomNova2)
 
-        atributos = featureParaCortar.attributes()
+            if(geomNova1.length() > self.tolerancia and geomNova2.length() > self.tolerancia):
+                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
+                layer.commitChanges()
+                self.trim()
+            else:
+                layer.deleteFeature(featureParaCortar.id())
 
-        featNova.setGeometry(geomParaManter)
-        featNova.setAttributes(atributos)
+                if(geomNova1.length() > self.tolerancia):
+                    layer.addFeature(feat1, True)
 
-        layer.startEditing()
-        layer.addFeature(featNova, True)
-        layer.deleteFeature(featAntiga.id())
-        layer.commitChanges()
+                if(geomNova2.length() > self.tolerancia):
+                    layer.addFeature(feat2, True)
 
+                layer.commitChanges()
 
-    def selecaoMudou(self, added, removed, cleared):
-        if len(added) > 2:
-            selecionados = []
-            for i in range(len(added)-3, len(added)):
-                selecionados.append(added[i])
-            
-            self.iface.activeLayer().setSelectedFeatures(selecionados)
+        self.trim()
