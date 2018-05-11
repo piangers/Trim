@@ -1,11 +1,10 @@
 # -*- coding: UTF-8 -*-
-from qgis.core import *
-from qgis.gui import *
+from qgis.core import QgsWKBTypes,QgsGeometry,QgsFeatureRequest,QgsFeature
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
-import math
 from selectiontool import SelectionTool
 import resources_rc
+import math
 #Import own classes and tools
 
 
@@ -64,7 +63,7 @@ class Trim:
         layer.setSelectedFeatures([]) # seta features como vazio
         self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
         self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.executeTrim)
+        self.seletor.twoSelected.connect(self.executeTrim) # cria a conecção ao receber o segundo click
 
     def expand (self):
         layer = self.iface.activeLayer() # pega a layer ativa
@@ -73,12 +72,12 @@ class Trim:
             return
         
         layer.setSelectedFeatures([]) # seta features como vazio
-        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
+        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry) # cria um seletor e quando captura o segundo click, ele realiza a connecção.
         self.canvas.setMapTool(self.seletor)
         self.seletor.twoSelected.connect(self.executeExpand)
 
     def executeExpand(self, selecionadas):
-        dist = self.tolerancia
+        distancia = self.tolerancia
 
         layer = self.iface.activeLayer() # pega a layer ativa
 
@@ -93,30 +92,29 @@ class Trim:
 
         if not geomParaAlongar.intersects(geomDeTeste):
             ultimoVertice = len(geomParaAlongar.asPolyline())-1
-            extr1 = geomParaAlongar.vertexAt(0)
-            extr2 = geomParaAlongar.vertexAt(ultimoVertice)
-
-            extr = -1
-            dist1 = extr1.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extr1)).asPoint())
-            dist2 = extr2.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extr2)).asPoint())
-            if dist1 < dist2:
-                extr = 0
+            extremidade1 = geomParaAlongar.vertexAt(0)
+            extremidade2 = geomParaAlongar.vertexAt(ultimoVertice)
+            extremidade = -1
+            distancia1 = extremidade1.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extremidade1)).asPoint())
+            distancia2 = extremidade2.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extremidade2)).asPoint())
+            if distancia1 < distancia2:
+                extremidade = 0
             else:
-                extr = ultimoVertice
+                extremidade = ultimoVertice
     
-            adj1, adj2 = geomParaAlongar.adjacentVertices(extr)
+            adj1, adj2 = geomParaAlongar.adjacentVertices(extremidade)
             adj = adj1 if (adj1 != -1) else adj2
 
-            ultimo = geomParaAlongar.vertexAt(extr)
+            ultimo = geomParaAlongar.vertexAt(extremidade)
             anterior = geomParaAlongar.vertexAt(adj)
 
-            ang = math.atan((ultimo.y() - anterior.y())/(ultimo.x() - anterior.x()))
+            angulo = math.atan((ultimo.y() - anterior.y())/(ultimo.x() - anterior.x()))
 
-            novoX = ultimo.x() + dist * math.cos(ang)
-            novoY = ultimo.y() + dist * math.sin(ang)
+            novoX = ultimo.x() + distancia * math.cos(angulo)
+            novoY = ultimo.y() + distancia * math.sin(angulo)
 
             layer.startEditing()
-            layer.moveVertex(novoX, novoY, idParaAlongar, extr)
+            layer.moveVertex(novoX, novoY, idParaAlongar, extremidade)
             layer.commitChanges()
 
             featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
@@ -124,13 +122,14 @@ class Trim:
             if not novaGeom.intersects(geomDeTeste):
                 QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
                 layer.startEditing()
-                layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extr)
+                layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extremidade)
                 layer.commitChanges()
             
             else:
                 selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
                 self.executeTrim(selecionadas2)
-        
+        else:
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As feições selecionadas já possuem interseção! Escolha outra feição ou utilize a ferramenta Trim.")
         self.expand()
 
     def executeTrim(self, selecionadas):
@@ -145,12 +144,12 @@ class Trim:
         geom1 = featureDeCorte.geometry() # pega a geometria
 
         if not geom0.intersects(geom1): # Se não existe interseção então mostra a mensagem
-            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Não há intersecção entre as feições selecionadas!")
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Não há interseção entre as feições selecionadas! Escolha outra feição ou utiliza a ferramneta Expand")
         else:
             sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
             geomNova1 = splits[0]
             geomAntiga = geom0
-            geomNova2 = geomAntiga.difference(geomNova1)
+            geomNova2 = geomAntiga.difference(geomNova1) # diference é a segunda parte do split da feição criada nos moldes da original e dividida. 
             layer.startEditing()
             feat1 = QgsFeature()
             feat2 = QgsFeature()
