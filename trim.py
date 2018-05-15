@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-from qgis.core import QgsWKBTypes,QgsGeometry,QgsFeatureRequest,QgsFeature
+from qgis.core import QgsWKBTypes,QgsGeometry,QgsFeatureRequest,QgsFeature, QGis
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 from selectiontool import SelectionTool
@@ -21,11 +21,15 @@ class Trim:
         settings = QSettings()
         self.trimAction = QAction(QIcon(":/plugins/Trim/tr.png"), u'Trim', self.iface.mainWindow())
         self.expandAction = QAction(QIcon(":/plugins/Trim/ex.png"), u'Expand', self.iface.mainWindow())
+        self.trimAction.setCheckable(True)
+        self.expandAction.setCheckable(True)
+
         self.spinBox = QDoubleSpinBox(self.iface.mainWindow())
         self.toolbar = self.iface.addToolBar(u'Trim tools')
+        
         # 2 - CONECTAR O CLIQUE DO BOTÃO COM UM MÉTODO ("SLOT")
-        self.trimAction.triggered.connect(self.trim)
-        self.expandAction.triggered.connect(self.expand)
+        self.trimAction.toggled.connect(self.trim)
+        self.expandAction.toggled.connect(self.expand)
         self.spinBox.valueChanged.connect(self.setTolerancia)
        
         #Padrões fixados
@@ -53,39 +57,54 @@ class Trim:
     def setTolerancia(self, t):
         self.tolerancia = t # recebendo tolerância atravéz de t.
 
-    def trim (self):
+    def trim (self, bip):
         
         layer = self.iface.activeLayer() # pega a layer ativa
         if layer == None:
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
-        
-        layer.setSelectedFeatures([]) # seta features como vazio
-        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
-        self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.executeTrim) # cria a conecção ao receber o segundo click
 
-    def expand (self):
+        if not layer.isEditable():
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u'É necessário ativar o modo de edição "Alterna edição", para utilizar a ferramenta!')
+            return
+
+        if layer.geometryType() != QGis.Line:
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u'A ferramenta só pode ser executada em camadas do tipo linha!')
+            return
+
+        if bip:
+            if self.expandAction.isChecked():
+                self.expandAction.setChecked(False)
+            layer.setSelectedFeatures([]) # seta features como vazio
+            self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry)
+            self.canvas.setMapTool(self.seletor)
+            self.seletor.twoSelected.connect(self.executeTrim) # cria a conecção ao receber o segundo click
+        else:
+            self.canvas.unsetMapTool(self.seletor)
+
+    def expand (self, bip):
         layer = self.iface.activeLayer() # pega a layer ativa
         if layer == None:
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
+        if not layer.isEditable():
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u'É necessário ativar o modo de edição "Alterna edição", para utilizar a ferramenta!')
+            return
 
-        layer.setSelectedFeatures([]) # seta features como vazio
-        self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry) # cria um seletor e quando captura o segundo click, ele realiza a connecção.
-        self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.executeExpand) # ao selecionar a segunda feature ele realiza a ação
+        if bip:
+            if self.trimAction.isChecked():
+                self.trimAction.setChecked(False)
+            layer.setSelectedFeatures([]) # seta features como vazio
+            self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry) # cria um seletor e quando captura o segundo click, ele realiza a connecção.
+            self.canvas.setMapTool(self.seletor)
+            self.seletor.twoSelected.connect(self.executeExpand) # ao selecionar a segunda feature ele realiza a ação
+        else:
+            self.canvas.unsetMapTool(self.seletor)
 
     def executeExpand(self, selecionadas):
         distancia = self.tolerancia # distancia recebe a tolerância
 
         layer = self.iface.activeLayer() # pega a layer ativa
-
-        if not layer.isEditable():
-            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"A edição deve estar ativada para utilizar a ferramenta.")
-            layer.setSelectedFeatures([])
-            self.seletor.selecionadas = []
-            return
 
         idParaAlongar = selecionadas[0] # pega o id da primeira feature setada e no array de selecionadas
         idDeTeste = selecionadas[1] # pega o id da segunda feature setada e no array de selecionadas
@@ -123,29 +142,21 @@ class Trim:
             layer.moveVertex(novoX, novoY, idParaAlongar, extremidade)
             layer.commitChanges()
             layer.startEditing()
-
             featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
             novaGeom = featParaAlongar.geometry()
             if not novaGeom.intersects(geomDeTeste):
                 layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extremidade)
                 layer.commitChanges()
                 layer.startEditing()
-                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")  
-
+                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida ou não respeitam as condições necessárias para a execução!")  
             else:
                 selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
                 self.executeTrim(selecionadas2)
         
-        self.expand()
+        self.expand(True)
 
     def executeTrim(self, selecionadas):
         layer = self.iface.activeLayer() # pegar a layer ativa
-        
-        if not layer.isEditable():
-            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"A edição deve estar ativada para utilizar a ferramenta.")
-            layer.setSelectedFeatures([])
-            self.seletor.selecionadas = []
-            return
 
         # "selecionadas" recebe a lista com as features das feições selecionadas(2)    
         featureParaCortar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next() # a linha a ser dividida
@@ -170,22 +181,17 @@ class Trim:
             feat2.setGeometry(geomNova2)
             
             if(geomNova1.length() > self.tolerancia and geomNova2.length() > self.tolerancia):
-                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
-
+                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida ou não respeitam as condições necessárias para a execução!")
                 layer.commitChanges()
                 layer.startEditing()
-                self.trim()
-            
+                self.trim()   
             else:
                 layer.deleteFeature(featureParaCortar.id())
-
                 if(geomNova1.length() > self.tolerancia):
                     layer.addFeature(feat1, True)
-
                 if(geomNova2.length() > self.tolerancia):
                     layer.addFeature(feat2, True)
-
                 layer.commitChanges()
                 layer.startEditing()
 
-        self.trim()
+        self.trim(True)
