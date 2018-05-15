@@ -51,7 +51,7 @@ class Trim:
             pass
 
     def setTolerancia(self, t):
-        self.tolerancia = t
+        self.tolerancia = t # recebendo tolerância atravéz de t.
 
     def trim (self):
         
@@ -70,25 +70,31 @@ class Trim:
         if layer == None:
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
-        
+
         layer.setSelectedFeatures([]) # seta features como vazio
         self.seletor = SelectionTool(self.iface,QgsWKBTypes.LineGeometry) # cria um seletor e quando captura o segundo click, ele realiza a connecção.
         self.canvas.setMapTool(self.seletor)
-        self.seletor.twoSelected.connect(self.executeExpand)
+        self.seletor.twoSelected.connect(self.executeExpand) # ao selecionar a segunda feature ele realiza a ação
 
     def executeExpand(self, selecionadas):
-        distancia = self.tolerancia
+        distancia = self.tolerancia # distancia recebe a tolerância
 
         layer = self.iface.activeLayer() # pega a layer ativa
 
-        idParaAlongar = selecionadas[0]
-        idDeTeste = selecionadas[1]
+        if not layer.isEditable():
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"A edição deve estar ativada para utilizar a ferramenta.")
+            layer.setSelectedFeatures([])
+            self.seletor.selecionadas = []
+            return
 
-        featParaAlongar = layer.getFeatures(QgsFeatureRequest(idParaAlongar)).next()
-        featDeTeste = layer.getFeatures(QgsFeatureRequest(idDeTeste)).next()
+        idParaAlongar = selecionadas[0] # pega o id da primeira feature setada e no array de selecionadas
+        idDeTeste = selecionadas[1] # pega o id da segunda feature setada e no array de selecionadas
 
-        geomParaAlongar = featParaAlongar.geometry()
-        geomDeTeste = featDeTeste.geometry()
+        featParaAlongar = layer.getFeatures(QgsFeatureRequest(idParaAlongar)).next() # pega a primeira feature  selecionadas
+        featDeTeste = layer.getFeatures(QgsFeatureRequest(idDeTeste)).next() # pega a segunda feature  selecionadas
+
+        geomParaAlongar = featParaAlongar.geometry() # pega a geometria da primeira feature
+        geomDeTeste = featDeTeste.geometry() # pega a geometria da segunda feature
 
         if not geomParaAlongar.intersects(geomDeTeste):
             ultimoVertice = len(geomParaAlongar.asPolyline())-1
@@ -107,50 +113,54 @@ class Trim:
 
             ultimo = geomParaAlongar.vertexAt(extremidade)
             anterior = geomParaAlongar.vertexAt(adj)
-
+            
+            # Formula geometricas pra buscar o angulo
             angulo = math.atan((ultimo.y() - anterior.y())/(ultimo.x() - anterior.x()))
-
-            novoX = ultimo.x() + distancia * math.cos(angulo)
+            novoX = ultimo.x() + distancia * math.cos(angulo) 
             novoY = ultimo.y() + distancia * math.sin(angulo)
 
-            layer.startEditing()
+            #layer.startEditing()
             layer.moveVertex(novoX, novoY, idParaAlongar, extremidade)
             layer.commitChanges()
+            layer.startEditing()
 
             featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
             novaGeom = featParaAlongar.geometry()
             if not novaGeom.intersects(geomDeTeste):
-                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
-                layer.startEditing()
                 layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extremidade)
                 layer.commitChanges()
-            
+                layer.startEditing()
+                QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")  
+
             else:
                 selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
                 self.executeTrim(selecionadas2)
-        else:
-            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As feições selecionadas já possuem interseção! Escolha outra feição ou utilize a ferramenta Trim.")
+        
         self.expand()
 
     def executeTrim(self, selecionadas):
         layer = self.iface.activeLayer() # pegar a layer ativa
-        # "selecionadas" recebe a lista com as features das feições selecionadas(2)
         
-        # pegar as duas linhas    
+        if not layer.isEditable():
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"A edição deve estar ativada para utilizar a ferramenta.")
+            layer.setSelectedFeatures([])
+            self.seletor.selecionadas = []
+            return
+
+        # "selecionadas" recebe a lista com as features das feições selecionadas(2)    
         featureParaCortar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next() # a linha a ser dividida
         featureDeCorte = layer.getFeatures(QgsFeatureRequest(selecionadas[1])).next() # a linha que faz a intersecão e serve de ponto para a divisão
-        
         geom0 = featureParaCortar.geometry() # pega a geometria 
         geom1 = featureDeCorte.geometry() # pega a geometria
 
         if not geom0.intersects(geom1): # Se não existe interseção então mostra a mensagem
-            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Não há interseção entre as feições selecionadas! Escolha outra feição ou utiliza a ferramneta Expand")
+            QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Não há interseção entre as feições selecionadas! Escolha outra feição.")
         else:
             sucesso, splits, topo = geom0.splitGeometry(geom1.asPolyline(), True)
             geomNova1 = splits[0]
             geomAntiga = geom0
-            geomNova2 = geomAntiga.difference(geomNova1) # diference é a segunda parte do split da feição criada nos moldes da original e dividida. 
-            layer.startEditing()
+            geomNova2 = geomAntiga.difference(geomNova1) # Segunda parte do split da feição criada nos moldes da original, só recebida se utilizar o "difference".
+            #layer.startEditing()
             feat1 = QgsFeature()
             feat2 = QgsFeature()
             atributos = featureParaCortar.attributes()
@@ -158,11 +168,14 @@ class Trim:
             feat2.setAttributes(atributos)
             feat1.setGeometry(geomNova1)
             feat2.setGeometry(geomNova2)
-
+            
             if(geomNova1.length() > self.tolerancia and geomNova2.length() > self.tolerancia):
                 QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida!")
+
                 layer.commitChanges()
+                layer.startEditing()
                 self.trim()
+            
             else:
                 layer.deleteFeature(featureParaCortar.id())
 
@@ -173,5 +186,6 @@ class Trim:
                     layer.addFeature(feat2, True)
 
                 layer.commitChanges()
+                layer.startEditing()
 
         self.trim()
