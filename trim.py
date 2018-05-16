@@ -5,7 +5,6 @@ from PyQt4.QtGui import *
 from selectiontool import SelectionTool
 import resources_rc
 import math
-#Import own classes and tools
 
 
 class Trim:
@@ -40,15 +39,12 @@ class Trim:
         self.spinBox.setSingleStep(0.100)
         self.tolerancia = self.spinBox.value()
         self.spinBox.setToolTip("Tolerancia")
-        #self.spinBoxAction.setEnabled(False)
-
         self.toolbar.addAction(self.trimAction)
         self.toolbar.addAction(self.expandAction)
         self.toolbar.addWidget(self.spinBox)
  
     def unload(self):
         del self.toolbar
-        
         try:
             self.canvas.unsetMapTool(self.seletor)
         except:
@@ -63,11 +59,9 @@ class Trim:
         if layer == None:
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"Selecione uma camada antes de ativar a ferramenta!")
             return
-
         if not layer.isEditable():
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u'É necessário ativar o modo de edição "Alterna edição", para utilizar a ferramenta!')
             return
-
         if layer.geometryType() != QGis.Line:
             QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u'A ferramenta só pode ser executada em camadas do tipo linha!')
             return
@@ -103,9 +97,7 @@ class Trim:
 
     def executeExpand(self, selecionadas):
         distancia = self.tolerancia # distancia recebe a tolerância
-
         layer = self.iface.activeLayer() # pega a layer ativa
-
         idParaAlongar = selecionadas[0] # pega o id da primeira feature setada e no array de selecionadas
         idDeTeste = selecionadas[1] # pega o id da segunda feature setada e no array de selecionadas
 
@@ -122,6 +114,7 @@ class Trim:
             extremidade = -1
             distancia1 = extremidade1.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extremidade1)).asPoint())
             distancia2 = extremidade2.distance(geomDeTeste.nearestPoint(QgsGeometry.fromPoint(extremidade2)).asPoint())
+            
             if distancia1 < distancia2:
                 extremidade = 0
             else:
@@ -138,12 +131,12 @@ class Trim:
             novoX = ultimo.x() + distancia * math.cos(angulo) 
             novoY = ultimo.y() + distancia * math.sin(angulo)
 
-            #layer.startEditing()
             layer.moveVertex(novoX, novoY, idParaAlongar, extremidade)
             layer.commitChanges()
             layer.startEditing()
             featParaAlongar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next()
             novaGeom = featParaAlongar.geometry()
+            
             if not novaGeom.intersects(geomDeTeste):
                 layer.moveVertex(ultimo.x(), ultimo.y(), idParaAlongar, extremidade)
                 layer.commitChanges()
@@ -152,12 +145,10 @@ class Trim:
             else:
                 selecionadas2 = [featParaAlongar.id(),featDeTeste.id()]
                 self.executeTrim(selecionadas2)
-        
         self.expand(True)
-
+    
     def executeTrim(self, selecionadas):
         layer = self.iface.activeLayer() # pegar a layer ativa
-
         # "selecionadas" recebe a lista com as features das feições selecionadas(2)    
         featureParaCortar = layer.getFeatures(QgsFeatureRequest(selecionadas[0])).next() # a linha a ser dividida
         featureDeCorte = layer.getFeatures(QgsFeatureRequest(selecionadas[1])).next() # a linha que faz a intersecão e serve de ponto para a divisão
@@ -171,7 +162,6 @@ class Trim:
             geomNova1 = splits[0]
             geomAntiga = geom0
             geomNova2 = geomAntiga.difference(geomNova1) # Segunda parte do split da feição criada nos moldes da original, só recebida se utilizar o "difference".
-            #layer.startEditing()
             feat1 = QgsFeature()
             feat2 = QgsFeature()
             atributos = featureParaCortar.attributes()
@@ -184,14 +174,15 @@ class Trim:
                 QMessageBox.information (self.iface.mainWindow() ,  u'ATENÇÃO!' ,  u"As linhas selecionadas excedem a tolerância definida ou não respeitam as condições necessárias para a execução!")
                 layer.commitChanges()
                 layer.startEditing()
-                self.trim()   
+                self.trim(True)   
             else:
                 layer.deleteFeature(featureParaCortar.id())
                 if(geomNova1.length() > self.tolerancia):
                     layer.addFeature(feat1, True)
+                
                 if(geomNova2.length() > self.tolerancia):
                     layer.addFeature(feat2, True)
+                
                 layer.commitChanges()
                 layer.startEditing()
-
         self.trim(True)
